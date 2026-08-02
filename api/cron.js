@@ -15,7 +15,7 @@ function loadSnapshot() {
       return JSON.parse(fs.readFileSync(SNAPSHOT_FILE, 'utf-8'));
     }
   } catch (e) {}
-  return { knownResults: {}, activeAlerts: [] };
+  return { knownResults: {}, activeAlerts: [], logs: [] };
 }
 
 // Helper to save snapshot
@@ -28,7 +28,6 @@ function saveSnapshot(data) {
 // Resolve Chromium executablePath for Vercel Lambda (Linux) vs Local Dev (Windows/Mac)
 async function getExecutablePath() {
   if (process.env.VERCEL) {
-    // Hosted Chromium pack URL containing all shared libraries (libnss3.so, etc.) for Vercel
     return await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar');
   }
 
@@ -96,6 +95,19 @@ module.exports = async function handler(req, res) {
   console.log('[Vercel Cron] Starting ResultWatcher scan execution...');
   let browser = null;
   let extracted = [];
+  const snapshot = loadSnapshot();
+  snapshot.logs = snapshot.logs || [];
+
+  const addLog = (msg, type = 'info') => {
+    snapshot.logs.unshift({
+      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      message: msg,
+      type
+    });
+    if (snapshot.logs.length > 50) snapshot.logs.pop();
+  };
+
+  addLog('Starting ResultWatcher scan on mbmiums.in...', 'info');
 
   try {
     const executablePath = await getExecutablePath();
@@ -118,7 +130,6 @@ module.exports = async function handler(req, res) {
     await page.goto(targetUrl, { waitUntil: 'networkidle2' });
 
     // Click LinkButton8 ((II)Odd Semester Examination Results 2025-26)
-    console.log('[Vercel Cron] Clicking LinkButton8...');
     const clickResult = await page.evaluate(() => {
       const link = document.querySelector('#LinkButton8') || 
                    Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('Odd Semester Examination Results 2025-26'));
@@ -130,7 +141,7 @@ module.exports = async function handler(req, res) {
     });
 
     if (clickResult.clicked) {
-      console.log(`[Vercel Cron] Clicked "${clickResult.text}". Waiting for UpdatePanel...`);
+      addLog(`Clicked "${clickResult.text}". Waiting for UpdatePanel render...`, 'success');
       await new Promise(r => setTimeout(r, 3000));
       await page.waitForNetworkIdle({ timeout: 5000 }).catch(() => {});
     }
@@ -146,10 +157,10 @@ module.exports = async function handler(req, res) {
         .filter(l => l.text.length > 3 && !l.text.toLowerCase().includes('home') && l.text.toUpperCase() !== 'BACK');
     });
 
-    console.log(`[Vercel Cron] Puppeteer extracted ${extracted.length} result links.`);
+    addLog(`Extracted ${extracted.length} result links.`, 'success');
 
   } catch (err) {
-    console.error(`[Vercel Cron Browser Error]: ${err.message}. Switching to HTTP fallback...`);
+    addLog(`Browser error: ${err.message}. Using HTTP fallback...`, 'warning');
     extracted = await fetchResultsViaHttp();
   } finally {
     if (browser) {
@@ -158,12 +169,11 @@ module.exports = async function handler(req, res) {
   }
 
   // Compare with Snapshot
-  const snapshot = loadSnapshot();
   const isFirstRun = Object.keys(snapshot.knownResults).length === 0;
   const newItems = [];
 
   for (const item of extracted) {
-    const key = (item.id ? item.id + '_' : '') + item.text.toLowerCase();
+    const key = (item.id ? item.id + '_' : '') + (item.text || '').toLowerCase();
     if (!snapshot.knownResults[key]) {
       snapshot.knownResults[key] = {
         key,
@@ -182,16 +192,16 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  saveSnapshot(snapshot);
-
   // Dispatch Alerts if new results found
   let alertDispatchResults = null;
   if (newItems.length > 0) {
-    console.log(`[Vercel Cron] 🚨 ALARM TRIGGERED! ${newItems.length} NEW RESULT(S) DETECTED!`);
+    addLog(`🚨 ALARM TRIGGERED! ${newItems.length} NEW RESULT(S) DETECTED!`, 'alert');
     alertDispatchResults = await sendTwilioSms(newItems);
   } else {
-    console.log('[Vercel Cron] Scan complete. No new results detected.');
+    addLog(`Scan complete. No new results detected (${extracted.length} links checked).`, 'info');
   }
+
+  saveSnapshot(snapshot);
 
   const formattedList = extracted.map(i => ({
     title: i.text || i.title || 'Exam Result',
@@ -208,7 +218,8 @@ module.exports = async function handler(req, res) {
       knownResultsList: formattedList,
       newResultsFound: newItems.length,
       newResults: newItems,
-      alertDispatchResults
+      alertDispatchResults,
+      logs: snapshot.logs
     });
   }
 };

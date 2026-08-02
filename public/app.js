@@ -31,6 +31,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const logsConsole = document.getElementById('logs-console');
   const tableSearchInput = document.getElementById('table-search-input');
 
+  // Load saved credentials from LocalStorage
+  function loadLocalCredentials() {
+    if (localStorage.getItem('rw_twilio_sid')) twilioSid.value = localStorage.getItem('rw_twilio_sid');
+    if (localStorage.getItem('rw_twilio_token')) twilioToken.value = localStorage.getItem('rw_twilio_token');
+    if (localStorage.getItem('rw_twilio_from')) twilioFrom.value = localStorage.getItem('rw_twilio_from');
+    if (localStorage.getItem('rw_twilio_to')) twilioTo.value = localStorage.getItem('rw_twilio_to');
+  }
+
+  // Save credentials to LocalStorage
+  function saveLocalCredentials() {
+    localStorage.setItem('rw_twilio_sid', twilioSid.value.trim());
+    localStorage.setItem('rw_twilio_token', twilioToken.value.trim());
+    localStorage.setItem('rw_twilio_from', twilioFrom.value.trim());
+    localStorage.setItem('rw_twilio_to', twilioTo.value.trim());
+    addLog('Twilio settings saved locally in browser.', 'success');
+  }
+
   // Web Audio Alarm Synthesizer
   function initAudioContext() {
     if (!audioContext) {
@@ -86,10 +103,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch status from server
   async function fetchStatus() {
     try {
-      const res = await fetch('/api/watcher/status');
+      const res = await fetch('/api/status');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       currentState = data;
+
+      if (data.twilio) {
+        if (!twilioSid.value && data.twilio.accountSid) twilioSid.value = data.twilio.accountSid;
+        if (!twilioFrom.value && data.twilio.fromNumber) twilioFrom.value = data.twilio.fromNumber;
+        if (!twilioTo.value && data.twilio.toNumber) twilioTo.value = data.twilio.toNumber;
+      }
+
       renderUI(data);
     } catch (err) {
       console.warn('Status fetch error:', err.message);
@@ -97,7 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderUI(data) {
-    // 1. Pause / Resume Button & Status Badge
     if (data.isPaused) {
       statusBadge.className = 'status-badge status-offline';
       statusText.textContent = 'Watcher PAUSED';
@@ -107,21 +130,13 @@ document.addEventListener('DOMContentLoaded', () => {
       statTimerStatus.className = 'stat-value text-amber';
     } else {
       statusBadge.className = 'status-badge status-online';
-      statusText.textContent = data.isScanning ? 'Scanning Portal...' : '5-Min Auto Watcher Running';
+      statusText.textContent = data.isScanning ? 'Scanning Portal...' : '5-Min Auto Watcher Active';
       btnPauseResume.className = 'btn btn-lg btn-success btn-block';
       btnPauseResume.innerHTML = '<i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER';
       statTimerStatus.textContent = '5 Mins';
       statTimerStatus.className = 'stat-value text-green';
     }
 
-    // 2. Twilio Config Sync
-    if (data.twilio) {
-      if (document.activeElement !== twilioSid) twilioSid.value = data.twilio.accountSid || '';
-      if (document.activeElement !== twilioFrom) twilioFrom.value = data.twilio.fromNumber || '';
-      if (document.activeElement !== twilioTo) twilioTo.value = data.twilio.toNumber || '';
-    }
-
-    // 3. Stats & Alerts
     statKnownCount.textContent = data.knownCount || 0;
     statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
 
@@ -140,9 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 4. Logs & Table
     renderResultsTable(data.knownResultsList || []);
-    renderLogs(data.logs || []);
   }
 
   function renderResultsTable(items) {
@@ -158,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (filtered.length === 0) {
-      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded. Click "Check Portal Right Now" above.</td></tr>`;
+      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded. Click "Check Portal Right Now" or "Trigger Vercel Cron Scan Now" above.</td></tr>`;
       return;
     }
 
@@ -175,77 +188,28 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
-  function renderLogs(logs) {
-    if (!logs || logs.length === 0) return;
-    logsConsole.innerHTML = logs.map(l => {
-      let logClass = 'log-info';
-      if (l.type === 'alert') logClass = 'log-alert';
-      else if (l.type === 'warning') logClass = 'log-warning';
-      else if (l.type === 'error') logClass = 'log-error';
-      else if (l.type === 'success') logClass = 'log-success';
-
-      return `<div class="log-entry ${logClass}">[${l.timestamp}] ${escapeHtml(l.message)}</div>`;
-    }).join('');
-  }
-
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
   }
 
   // Event Handlers
-  btnPauseResume.addEventListener('click', async () => {
-    try {
-      const res = await fetch('/api/watcher/toggle-pause', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        addLog(`Auto-watcher ${data.isPaused ? 'PAUSED ⏸️' : 'RESUMED 🟢'}`, 'success');
-        fetchStatus();
-      }
-    } catch (e) {
-      addLog(`Failed to toggle pause: ${e.message}`, 'error');
-    }
-  });
-
-  btnCheckNow.addEventListener('click', async () => {
-    btnCheckNow.disabled = true;
-    btnCheckNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Portal...';
-    try {
-      await fetch('/api/watcher/check-now', { method: 'POST' });
-      setTimeout(fetchStatus, 2000);
-    } catch (e) {
-      addLog(`Manual check error: ${e.message}`, 'error');
-    } finally {
-      setTimeout(() => {
-        btnCheckNow.disabled = false;
-        btnCheckNow.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Check Portal Right Now';
-      }, 2500);
-    }
-  });
-
-  btnSaveTwilio.addEventListener('click', async () => {
-    const payload = {
-      accountSid: twilioSid.value.trim(),
-      authToken: twilioToken.value.trim(),
-      fromNumber: twilioFrom.value.trim(),
-      toNumber: twilioTo.value.trim()
-    };
-    try {
-      const res = await fetch('/api/watcher/twilio-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        addLog('Twilio SMS configuration saved.', 'success');
-      }
-    } catch (e) {
-      addLog(`Failed to save Twilio config: ${e.message}`, 'error');
-    }
+  btnSaveTwilio.addEventListener('click', () => {
+    saveLocalCredentials();
+    fetch('/api/watcher/twilio-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountSid: twilioSid.value.trim(),
+        authToken: twilioToken.value.trim(),
+        fromNumber: twilioFrom.value.trim(),
+        toNumber: twilioTo.value.trim()
+      })
+    }).catch(() => {});
   });
 
   btnSendTestSms.addEventListener('click', async () => {
+    saveLocalCredentials();
     btnSendTestSms.disabled = true;
     btnSendTestSms.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending Test SMS...';
     
@@ -257,7 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      const res = await fetch('/api/watcher/test-twilio', {
+      const endpoint = '/api/test-notifications';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -266,15 +231,46 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.success) {
         addLog(`📱 Test SMS sent to ${twilioTo.value}! (SID: ${data.sid})`, 'success');
       } else {
-        addLog(`Twilio SMS test error: ${data.error}`, 'error');
+        addLog(`Twilio SMS test error: ${data.error || data.message}`, 'error');
       }
     } catch (e) {
       addLog(`Test SMS request failed: ${e.message}`, 'error');
     } finally {
       btnSendTestSms.disabled = false;
       btnSendTestSms.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS';
-      fetchStatus();
     }
+  });
+
+  btnCheckNow.addEventListener('click', async () => {
+    btnCheckNow.disabled = true;
+    btnCheckNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning Portal...';
+    addLog('Manual scan triggered...', 'info');
+    try {
+      const res = await fetch('/api/cron');
+      const data = await res.json();
+      if (data.success) {
+        addLog(`Scan completed! Extracted ${data.extractedCount} links.`, 'success');
+        if (data.knownResultsList) renderResultsTable(data.knownResultsList);
+      }
+    } catch (e) {
+      addLog(`Scan error: ${e.message}`, 'error');
+    } finally {
+      setTimeout(() => {
+        btnCheckNow.disabled = false;
+        btnCheckNow.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Check Portal Right Now';
+      }, 2000);
+    }
+  });
+
+  btnPauseResume.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/watcher/toggle-pause', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        addLog(`Auto-watcher ${data.isPaused ? 'PAUSED ⏸️' : 'RESUMED 🟢'}`, 'success');
+        fetchStatus();
+      }
+    } catch (e) {}
   });
 
   btnTestSound.addEventListener('click', () => {
@@ -297,10 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
       clearInterval(alarmIntervalId);
       alarmIntervalId = null;
     }
-    try {
-      await fetch('/api/watcher/clear-alerts', { method: 'POST' });
-      fetchStatus();
-    } catch (e) {}
   });
 
   if (tableSearchInput) {
@@ -310,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Init
+  loadLocalCredentials();
   fetchStatus();
-  setInterval(fetchStatus, 4000);
+  setInterval(fetchStatus, 5000);
 });

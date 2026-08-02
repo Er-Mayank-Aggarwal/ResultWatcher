@@ -1,4 +1,5 @@
 const axios = require('axios');
+require('dotenv').config();
 
 const DEFAULT_FROM = '+15717245832';
 const DEFAULT_TO = '+916367468738';
@@ -13,8 +14,8 @@ async function sendTwilioSms(newResults, config = {}) {
   const toNumber = config.toNumber || process.env.TWILIO_TO_NUMBER || DEFAULT_TO;
 
   if (!accountSid || !authToken) {
-    console.log('[Twilio SMS] Account SID or Auth Token missing. SMS notification skipped.');
-    return { success: false, message: 'Twilio Account SID or Auth Token missing' };
+    console.log('[Twilio SMS] TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing. SMS notification skipped.');
+    return { success: false, message: 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing' };
   }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
