@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { dispatchAllNotifications } = require('../utils/notifications');
+const { sendTwilioSms } = require('../utils/twilio');
 
 const SNAPSHOT_FILE = process.env.VERCEL ? '/tmp/snapshot.json' : path.join(__dirname, '../snapshot.json');
 
@@ -188,7 +188,7 @@ module.exports = async function handler(req, res) {
   let alertDispatchResults = null;
   if (newItems.length > 0) {
     console.log(`[Vercel Cron] 🚨 ALARM TRIGGERED! ${newItems.length} NEW RESULT(S) DETECTED!`);
-    alertDispatchResults = await dispatchAllNotifications(newItems);
+    alertDispatchResults = await sendTwilioSms(newItems);
   } else {
     console.log('[Vercel Cron] Scan complete. No new results detected.');
   }
