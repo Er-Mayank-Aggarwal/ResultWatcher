@@ -1,0 +1,33 @@
+{
+  "name": "result-watcher",
+  "version": "1.0.0",
+  "description": "Vercel Serverless MBM Result Watcher with Mail & Webhook Hooks",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "mbm",
+    "result",
+    "watcher",
+    "vercel",
+    "cron",
+    "email",
+    "telegram",
+    "discord"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.0",
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.13",
+    "puppeteer-core": "^22.6.5"
+  }
+}

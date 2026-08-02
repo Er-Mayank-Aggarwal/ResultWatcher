@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ResultWatcher - Vercel Serverless MBM Result Alarm & Mail Hook</title>
+
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Fullscreen Alarm Overlay Banner -->
+  <div id="alarm-banner" class="alarm-banner hidden">
+    <div class="alarm-banner-content">
+      <div class="alarm-icon-pulse">
+        <i class="fa-solid fa-bell-ring fa-bounce"></i>
+      </div>
+      <div class="alarm-text">
+        <h2>🚨 NEW RESULT DECLARED ON MBM PORTAL!</h2>
+        <p id="alarm-details-text">A new result matching your criteria has been published!</p>
+      </div>
+      <div class="alarm-actions">
+        <button id="btn-silence-alarm" class="btn btn-warning"><i class="fa-solid fa-volume-xmark"></i> Silence Sound</button>
+        <button id="btn-clear-alarm" class="btn btn-primary"><i class="fa-solid fa-check"></i> Acknowledge Alert</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <i class="fa-solid fa-paper-plane"></i>
+        </div>
+        <div class="brand-info">
+          <h1>Result<span class="highlight">Watcher</span> <span class="vercel-badge">Vercel Serverless</span></h1>
+          <p class="subtitle">MBM Portal Watcher &bull; Vercel Cron &bull; Mail Hook & Webhooks</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div id="status-badge" class="status-badge status-online">
+          <span class="status-dot"></span>
+          <span id="status-text">Vercel Cron Ready</span>
+        </div>
+        <button id="btn-test-sound" class="btn btn-secondary btn-sm">
+          <i class="fa-solid fa-volume-high"></i> Test Alarm Sound
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid Dashboard -->
+    <main class="dashboard-grid">
+
+      <!-- Left Column: Notification Hooks & Settings -->
+      <section class="grid-col main-controls-col">
+
+        <!-- Mail Hook & Webhooks Config Card -->
+        <div class="card glass-card border-primary">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-envelope-circle-check text-primary"></i> Mail & Webhook Hooks</h3>
+          </div>
+          <div class="card-body">
+
+            <!-- SMTP Mail Hook Section -->
+            <div class="hook-section">
+              <h4 class="section-title"><i class="fa-solid fa-envelope"></i> SMTP Mail Hook (Nodemailer)</h4>
+              <div class="form-row">
+                <div class="form-group col-half">
+                  <label>SMTP Host</label>
+                  <input type="text" id="smtp-host" class="form-control" placeholder="smtp.gmail.com">
+                </div>
+                <div class="form-group col-half">
+                  <label>Port</label>
+                  <input type="text" id="smtp-port" class="form-control" placeholder="587">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group col-half">
+                  <label>SMTP User / Email</label>
+                  <input type="text" id="smtp-user" class="form-control" placeholder="your-email@gmail.com">
+                </div>
+                <div class="form-group col-half">
+                  <label>App Password</label>
+                  <input type="password" id="smtp-pass" class="form-control" placeholder="••••••••••••">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notification Target Email</label>
+                <input type="text" id="notification-email" class="form-control" placeholder="destination-email@gmail.com">
+              </div>
+            </div>
+
+            <!-- Telegram Webhook Section -->
+            <div class="hook-section">
+              <h4 class="section-title"><i class="fa-brands fa-telegram text-sky"></i> Telegram Bot Hook</h4>
+              <div class="form-group">
+                <label>Telegram Bot Token</label>
+                <input type="text" id="telegram-token" class="form-control" placeholder="123456789:ABCdefGhIJK...">
+              </div>
+              <div class="form-group">
+                <label>Telegram Chat ID</label>
+                <input type="text" id="telegram-chat-id" class="form-control" placeholder="-100123456789">
+              </div>
+            </div>
+
+            <!-- Discord Webhook Section -->
+            <div class="hook-section">
+              <h4 class="section-title"><i class="fa-brands fa-discord text-indigo"></i> Discord Webhook</h4>
+              <div class="form-group">
+                <label>Discord Webhook URL</label>
+                <input type="text" id="discord-webhook" class="form-control" placeholder="https://discord.com/api/webhooks/...">
+              </div>
+            </div>
+
+            <!-- Save & Test Buttons -->
+            <div class="action-row">
+              <button id="btn-test-notifications" class="btn btn-primary btn-block">
+                <i class="fa-solid fa-paper-plane"></i> Send Test Email & Webhook Alerts
+              </button>
+              <button id="btn-save-hooks" class="btn btn-secondary btn-block btn-sm">
+                <i class="fa-solid fa-floppy-disk"></i> Save Hook Settings Locally
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Manual Scan & Vercel Info Card -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-bolt"></i> Vercel Cron Trigger</h3>
+          </div>
+          <div class="card-body">
+            <p class="text-sm text-muted mb-4">Vercel Cron automatically triggers <code class="code-badge">/api/cron</code> every 5 minutes on Vercel production.</p>
+            <button id="btn-run-cron-now" class="btn btn-warning btn-block">
+              <i class="fa-solid fa-play"></i> Trigger Vercel Cron Scan Now
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Column: Results & Activity Log -->
+      <section class="grid-col main-feed-col">
+
+        <!-- Stats Card -->
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-value" id="stat-known-count">0</span>
+            <span class="stat-label">Published Results</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-value text-green" id="stat-cron-status">Active</span>
+            <span class="stat-label">Cron Schedule</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-value text-amber" id="stat-alerts-count">0</span>
+            <span class="stat-label">Unread Alerts</span>
+          </div>
+        </div>
+
+        <!-- Discovered Results Table -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-list-check"></i> Published Results (Odd Semester 2025-26)</h3>
+            <span class="table-search">
+              <input type="text" id="table-search-input" placeholder="Filter results...">
+            </span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-wrapper">
+              <table class="results-table">
+                <thead>
+                  <tr>
+                    <th>Exam Result Title</th>
+                    <th>Type</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="results-table-body">
+                  <tr>
+                    <td colspan="3" class="text-center text-muted">Loading results from snapshot...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Console Log -->
+        <div class="card glass-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-terminal"></i> Activity Log</h3>
+          </div>
+          <div class="card-body p-0">
+            <div id="logs-console" class="logs-console">
+              <div class="log-entry log-info">[System] ResultWatcher Vercel Serverless Engine Initialized.</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>ResultWatcher &bull; Vercel Serverless Cron Engine &bull; Mail Hook, Telegram & Discord Integration</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
