@@ -199,6 +199,7 @@ module.exports = async function handler(req, res) {
       timestamp: new Date().toISOString(),
       extractedCount: extracted.length,
       knownTotal: Object.keys(snapshot.knownResults).length,
+      knownResultsList: Object.values(snapshot.knownResults),
       newResultsFound: newItems.length,
       newResults: newItems,
       alertDispatchResults

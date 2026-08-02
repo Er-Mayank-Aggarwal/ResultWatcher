@@ -56,6 +56,23 @@ document.addEventListener('DOMContentLoaded', () => {
     addLog('Hook credentials saved locally in browser.', 'success');
   }
 
+  // LocalStorage Caching for Results (Persistent on Vercel)
+  function getCachedResults() {
+    try {
+      const cached = localStorage.getItem('rw_cached_results');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCachedResults(list) {
+    if (list && list.length > 0) {
+      try {
+        localStorage.setItem('rw_cached_results', JSON.stringify(list));
+      } catch (e) {}
+    }
+  }
+
   // Web Audio Alarm Synthesizer
   function initAudioContext() {
     if (!audioContext) {
@@ -115,14 +132,27 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       currentState = data;
+
+      if (data.knownResultsList && data.knownResultsList.length > 0) {
+        saveCachedResults(data.knownResultsList);
+      } else {
+        // Fallback to cached results if Vercel serverless container is fresh
+        data.knownResultsList = getCachedResults();
+        data.knownCount = data.knownResultsList.length;
+      }
+
       renderUI(data);
     } catch (err) {
       console.warn('Status fetch error:', err.message);
+      // Fallback to cached results on error
+      const cached = getCachedResults();
+      renderUI({ knownCount: cached.length, knownResultsList: cached });
     }
   }
 
   function renderUI(data) {
-    statKnownCount.textContent = data.knownCount || 0;
+    const resultsList = (data.knownResultsList && data.knownResultsList.length > 0) ? data.knownResultsList : getCachedResults();
+    statKnownCount.textContent = resultsList.length || 0;
     statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
 
     if (data.activeAlerts && data.activeAlerts.length > 0) {
@@ -140,18 +170,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    renderResultsTable(data.knownResultsList || []);
+    renderResultsTable(resultsList);
   }
 
   function renderResultsTable(items) {
     const term = tableSearchInput ? tableSearchInput.value.toLowerCase().trim() : '';
-    let filtered = items;
+    let filtered = items || [];
     if (term) {
-      filtered = items.filter(i => i.title.toLowerCase().includes(term));
+      filtered = filtered.filter(i => i.title.toLowerCase().includes(term));
     }
 
     if (filtered.length === 0) {
-      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links found.</td></tr>`;
+      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded yet. Click "Trigger Vercel Cron Scan Now" above.</td></tr>`;
       return;
     }
 
@@ -227,10 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.success) {
         addLog(`Vercel Cron scan completed! Extracted ${data.extractedCount} links.`, 'success');
+        
+        if (data.knownResultsList && data.knownResultsList.length > 0) {
+          saveCachedResults(data.knownResultsList);
+          renderUI({ knownCount: data.knownResultsList.length, knownResultsList: data.knownResultsList });
+        }
+
         if (data.newResultsFound > 0) {
           addLog(`🚨 ${data.newResultsFound} NEW RESULT(S) DETECTED! Alerts dispatched.`, 'alert');
         }
-        fetchStatus();
       } else {
         addLog(`Vercel Cron error: ${data.error}`, 'error');
       }
@@ -268,7 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (tableSearchInput) {
     tableSearchInput.addEventListener('input', () => {
-      if (currentState) renderResultsTable(currentState.knownResultsList || []);
+      const cached = getCachedResults();
+      renderResultsTable(cached);
     });
   }
 
