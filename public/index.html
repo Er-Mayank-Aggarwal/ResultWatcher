@@ -50,7 +50,7 @@
       <div class="header-status">
         <div id="status-badge" class="status-badge status-online">
           <span class="status-dot"></span>
-          <span id="status-text">5-Min Auto Watcher Running</span>
+          <span id="status-text">Auto Watcher Active</span>
         </div>
         <button id="btn-test-sound" class="btn btn-secondary btn-sm">
           <i class="fa-solid fa-volume-high"></i> Test Sound
@@ -61,7 +61,7 @@
     <!-- Main Grid Dashboard -->
     <main class="dashboard-grid">
 
-      <!-- Left Column: Controls & Twilio Settings -->
+      <!-- Left Column: Controls & Twilio Status -->
       <section class="grid-col main-controls-col">
 
         <!-- Pause / Resume Control Card -->
@@ -86,39 +86,25 @@
           </div>
         </div>
 
-        <!-- Twilio SMS Settings Card -->
+        <!-- Twilio SMS Status Card -->
         <div class="card glass-card border-amber">
           <div class="card-header">
-            <h3><i class="fa-solid fa-mobile-screen-button text-amber"></i> Twilio SMS Alert Config</h3>
+            <h3><i class="fa-solid fa-mobile-screen-button text-amber"></i> Twilio SMS Alert Status</h3>
           </div>
           <div class="card-body">
-            <div class="form-group">
-              <label>Account SID</label>
-              <input type="text" id="twilio-sid" class="form-control" placeholder="Enter Account SID e.g. AC30b0...">
-            </div>
-
-            <div class="form-group">
-              <label>Twilio Auth Token</label>
-              <input type="password" id="twilio-token" class="form-control" placeholder="Enter your Twilio Auth Token...">
-            </div>
-
-            <div class="form-row">
-              <div class="form-group col-half">
-                <label>From Number</label>
-                <input type="text" id="twilio-from" class="form-control" value="+15717245832">
+            <div class="sms-status-info mb-3">
+              <p><strong>Configured via Environment Variables:</strong></p>
+              <div class="env-detail-item mt-2">
+                <span class="text-muted">Target SMS:</span> <strong>+916367468738</strong>
               </div>
-              <div class="form-group col-half">
-                <label>Recipient To</label>
-                <input type="text" id="twilio-to" class="form-control" value="+916367468738">
+              <div class="env-detail-item mt-1">
+                <span class="text-muted">From Number:</span> <strong>+15717245832</strong>
               </div>
             </div>
 
             <div class="action-row">
               <button id="btn-send-test-sms" class="btn btn-warning btn-block">
                 <i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS
-              </button>
-              <button id="btn-save-twilio" class="btn btn-secondary btn-block btn-sm">
-                <i class="fa-solid fa-floppy-disk"></i> Save Twilio Settings
               </button>
             </div>
           </div>
@@ -136,8 +122,8 @@
             <span class="stat-label">Published Results</span>
           </div>
           <div class="stat-box">
-            <span class="stat-value text-green" id="stat-timer-status">5 Mins</span>
-            <span class="stat-label">Scan Interval</span>
+            <span class="stat-value text-green" id="stat-timer-countdown">05:00</span>
+            <span class="stat-label">Next Auto Scan</span>
           </div>
           <div class="stat-box">
             <span class="stat-value text-amber" id="stat-alerts-count">0</span>
@@ -165,7 +151,7 @@
                 </thead>
                 <tbody id="results-table-body">
                   <tr>
-                    <td colspan="3" class="text-center text-muted">Loading results from snapshot...</td>
+                    <td colspan="3" class="text-center text-muted">Loading results from portal...</td>
                   </tr>
                 </tbody>
               </table>

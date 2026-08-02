@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let alarmIntervalId = null;
   let isSoundSilenced = false;
   let currentState = null;
+  let countdownSeconds = 300; // 5 Minutes
 
   // DOM Elements
   const btnPauseResume = document.getElementById('btn-pause-resume');
@@ -25,11 +26,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusBadge = document.getElementById('status-badge');
   const statusText = document.getElementById('status-text');
   const statKnownCount = document.getElementById('stat-known-count');
-  const statTimerStatus = document.getElementById('stat-timer-status');
+  const statTimerCountdown = document.getElementById('stat-timer-countdown');
   const statAlertsCount = document.getElementById('stat-alerts-count');
   const resultsTableBody = document.getElementById('results-table-body');
   const logsConsole = document.getElementById('logs-console');
   const tableSearchInput = document.getElementById('table-search-input');
+
+  // Live 5-Minute Countdown Timer Loop
+  setInterval(() => {
+    countdownSeconds--;
+    if (countdownSeconds <= 0) {
+      countdownSeconds = 300;
+      addLog('5-Minute Timer triggered auto-scan...', 'info');
+      fetch('/api/cron').then(r => r.json()).then(data => {
+        if (data.knownResultsList) renderResultsTable(data.knownResultsList);
+      }).catch(() => {});
+    }
+
+    const mins = String(Math.floor(countdownSeconds / 60)).padStart(2, '0');
+    const secs = String(countdownSeconds % 60).padStart(2, '0');
+    if (statTimerCountdown) {
+      statTimerCountdown.textContent = `${mins}:${secs}`;
+    }
+  }, 1000);
 
   // Load saved credentials from LocalStorage
   function loadLocalCredentials() {
@@ -46,6 +65,23 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('rw_twilio_from', twilioFrom.value.trim());
     localStorage.setItem('rw_twilio_to', twilioTo.value.trim());
     addLog('Twilio settings saved locally in browser.', 'success');
+  }
+
+  // LocalStorage Caching for Extracted Result Links
+  function getCachedResults() {
+    try {
+      const cached = localStorage.getItem('rw_cached_results');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCachedResults(list) {
+    if (list && list.length > 0) {
+      try {
+        localStorage.setItem('rw_cached_results', JSON.stringify(list));
+      } catch (e) {}
+    }
   }
 
   // Web Audio Alarm Synthesizer
@@ -114,9 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!twilioTo.value && data.twilio.toNumber) twilioTo.value = data.twilio.toNumber;
       }
 
+      if (data.knownResultsList && data.knownResultsList.length > 0) {
+        saveCachedResults(data.knownResultsList);
+      }
+
       renderUI(data);
     } catch (err) {
       console.warn('Status fetch error:', err.message);
+      renderUI({ knownCount: getCachedResults().length });
     }
   }
 
@@ -126,18 +167,22 @@ document.addEventListener('DOMContentLoaded', () => {
       statusText.textContent = 'Watcher PAUSED';
       btnPauseResume.className = 'btn btn-lg btn-danger btn-block';
       btnPauseResume.innerHTML = '<i class="fa-solid fa-play"></i> RESUME AUTO WATCHER';
-      statTimerStatus.textContent = 'PAUSED';
-      statTimerStatus.className = 'stat-value text-amber';
+      if (statTimerCountdown) {
+        statTimerCountdown.textContent = 'PAUSED';
+        statTimerCountdown.className = 'stat-value text-amber';
+      }
     } else {
       statusBadge.className = 'status-badge status-online';
-      statusText.textContent = data.isScanning ? 'Scanning Portal...' : '5-Min Auto Watcher Active';
+      statusText.textContent = data.isScanning ? 'Scanning Portal...' : 'Auto Watcher Active';
       btnPauseResume.className = 'btn btn-lg btn-success btn-block';
       btnPauseResume.innerHTML = '<i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER';
-      statTimerStatus.textContent = '5 Mins';
-      statTimerStatus.className = 'stat-value text-green';
+      if (statTimerCountdown && statTimerCountdown.textContent === 'PAUSED') {
+        statTimerCountdown.className = 'stat-value text-green';
+      }
     }
 
-    statKnownCount.textContent = data.knownCount || 0;
+    const items = (data.knownResultsList && data.knownResultsList.length > 0) ? data.knownResultsList : getCachedResults();
+    statKnownCount.textContent = items.length || 0;
     statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
 
     if (data.activeAlerts && data.activeAlerts.length > 0) {
@@ -155,12 +200,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    renderResultsTable(data.knownResultsList || []);
+    renderResultsTable(items);
+    if (data.logs) renderLogs(data.logs);
   }
 
   function renderResultsTable(items) {
     const term = tableSearchInput ? tableSearchInput.value.toLowerCase().trim() : '';
-    let raw = items || [];
+    let raw = (items && items.length > 0) ? items : getCachedResults();
     let filtered = raw.map(i => ({
       title: i.title || i.text || 'Result Link',
       href: i.href || '#'
@@ -171,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (filtered.length === 0) {
-      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded. Click "Check Portal Right Now" or "Trigger Vercel Cron Scan Now" above.</td></tr>`;
+      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded. Click "Check Portal Right Now" above.</td></tr>`;
       return;
     }
 
@@ -186,6 +232,19 @@ document.addEventListener('DOMContentLoaded', () => {
         </td>
       </tr>
     `).join('');
+  }
+
+  function renderLogs(logs) {
+    if (!logs || logs.length === 0) return;
+    logsConsole.innerHTML = logs.map(l => {
+      let logClass = 'log-info';
+      if (l.type === 'alert') logClass = 'log-alert';
+      else if (l.type === 'warning') logClass = 'log-warning';
+      else if (l.type === 'error') logClass = 'log-error';
+      else if (l.type === 'success') logClass = 'log-success';
+
+      return `<div class="log-entry ${logClass}">[${l.timestamp}] ${escapeHtml(l.message)}</div>`;
+    }).join('');
   }
 
   function escapeHtml(str) {
@@ -250,11 +309,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.success) {
         addLog(`Scan completed! Extracted ${data.extractedCount} links.`, 'success');
-        if (data.knownResultsList) renderResultsTable(data.knownResultsList);
+        if (data.knownResultsList && data.knownResultsList.length > 0) {
+          saveCachedResults(data.knownResultsList);
+          renderResultsTable(data.knownResultsList);
+        }
       }
     } catch (e) {
       addLog(`Scan error: ${e.message}`, 'error');
     } finally {
+      countdownSeconds = 300; // Reset countdown
       setTimeout(() => {
         btnCheckNow.disabled = false;
         btnCheckNow.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Check Portal Right Now';
@@ -297,12 +360,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (tableSearchInput) {
     tableSearchInput.addEventListener('input', () => {
-      if (currentState) renderResultsTable(currentState.knownResultsList || []);
+      if (currentState) renderResultsTable(currentState.knownResultsList || getCachedResults());
     });
   }
 
   // Init
   loadLocalCredentials();
   fetchStatus();
-  setInterval(fetchStatus, 5000);
+  setInterval(fetchStatus, 4000);
 });
