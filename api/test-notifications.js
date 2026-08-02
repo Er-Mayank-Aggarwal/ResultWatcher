@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
   const body = req.body || {};
 
   const config = {
-    accountSid: body.accountSid || process.env.TWILIO_ACCOUNT_SID || '',
+    accountSid: body.accountSid || process.env.TWILIO_ACCOUNT_SID,
     authToken: body.authToken || process.env.TWILIO_AUTH_TOKEN,
     fromNumber: body.fromNumber || process.env.TWILIO_FROM_NUMBER || '+15717245832',
     toNumber: body.toNumber || process.env.TWILIO_TO_NUMBER || '+916367468738'

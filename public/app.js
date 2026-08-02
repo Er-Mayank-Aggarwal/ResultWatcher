@@ -261,9 +261,17 @@ document.addEventListener('DOMContentLoaded', () => {
       addLog('Sending test Twilio SMS alert...', 'info');
 
       try {
-        let res = await fetch('/api/test-notifications', { method: 'POST' });
+        let res = await fetch('/api/test-notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
         if (!res.ok) {
-          res = await fetch('/api/watcher/test-twilio', { method: 'POST' });
+          res = await fetch('/api/watcher/test-twilio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
         }
         const data = await res.json();
         if (data.success) {

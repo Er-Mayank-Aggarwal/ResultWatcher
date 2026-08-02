@@ -14,8 +14,8 @@ async function sendTwilioSms(newResults, config = {}) {
   const toNumber = config.toNumber || process.env.TWILIO_TO_NUMBER || DEFAULT_TO;
 
   if (!accountSid || !authToken) {
-    console.log('[Twilio SMS] TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing. SMS notification skipped.');
-    return { success: false, message: 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing' };
+    console.log('[Twilio SMS] TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing in environment. SMS notification skipped.');
+    return { success: false, message: 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN missing in Vercel Environment Variables' };
   }
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
