@@ -20,15 +20,8 @@ async function sendTwilioSms(newResults, config = {}) {
 
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
   const count = newResults.length;
-  
-  let messageBody = `🚨 MBM RESULT ALERT!\n${count} New Result(s) Released on mbmiums.in:\n\n`;
-  newResults.slice(0, 3).forEach((r, idx) => {
-    messageBody += `${idx + 1}. ${r.title}\n`;
-  });
-  if (count > 3) {
-    messageBody += `+ ${count - 3} more results.\n`;
-  }
-  messageBody += `\nCheck portal: https://mbmiums.in`;
+  const shortTitle = newResults[0] && newResults[0].title ? newResults[0].title.split('(')[0].trim() : 'Exam Result';
+  let messageBody = `🚨 MBM RESULT ALERT!\n${count} New Result: ${shortTitle}\nCheck portal: https://mbmiums.in`;
 
   const formData = new URLSearchParams();
   formData.append('To', toNumber);

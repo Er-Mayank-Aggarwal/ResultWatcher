@@ -279,6 +279,11 @@ app.post('/api/watcher/twilio-config', (req, res) => {
   res.json({ success: true, message: 'Twilio settings saved' });
 });
 
+app.post('/api/test-notifications', async (req, res) => {
+  addLog('Local /api/test-notifications test requested...', 'info');
+  return require('./api/test-notifications')(req, res);
+});
+
 app.post('/api/watcher/test-twilio', async (req, res) => {
   const { authToken } = req.body;
   if (authToken) watcherState.twilio.authToken = authToken.trim();
