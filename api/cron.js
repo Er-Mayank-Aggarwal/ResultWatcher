@@ -193,13 +193,19 @@ module.exports = async function handler(req, res) {
     console.log('[Vercel Cron] Scan complete. No new results detected.');
   }
 
+  const formattedList = extracted.map(i => ({
+    title: i.text || i.title || 'Exam Result',
+    href: i.href || '#',
+    key: (i.id ? i.id + '_' : '') + (i.text || '').toLowerCase()
+  }));
+
   if (res && res.status) {
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
       extractedCount: extracted.length,
-      knownTotal: Object.keys(snapshot.knownResults).length,
-      knownResultsList: Object.values(snapshot.knownResults),
+      knownTotal: formattedList.length,
+      knownResultsList: formattedList,
       newResultsFound: newItems.length,
       newResults: newItems,
       alertDispatchResults

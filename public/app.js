@@ -175,9 +175,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderResultsTable(items) {
     const term = tableSearchInput ? tableSearchInput.value.toLowerCase().trim() : '';
-    let filtered = items || [];
+    let raw = items || [];
+    let filtered = raw.map(i => ({
+      title: i.title || i.text || 'Result Link',
+      href: i.href || '#'
+    }));
+
     if (term) {
-      filtered = filtered.filter(i => i.title.toLowerCase().includes(term));
+      filtered = filtered.filter(i => (i.title || '').toLowerCase().includes(term));
     }
 
     if (filtered.length === 0) {
