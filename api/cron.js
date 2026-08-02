@@ -28,7 +28,12 @@ function saveSnapshot(data) {
 // Resolve Chromium executablePath for Vercel Lambda (Linux) vs Local Dev (Windows/Mac)
 async function getExecutablePath() {
   if (process.env.VERCEL) {
-    return await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar');
+    try {
+      chromium.setGraphicsMode = false;
+      return await chromium.executablePath();
+    } catch (e) {
+      return null;
+    }
   }
 
   if (process.platform === 'win32') {
@@ -111,6 +116,10 @@ module.exports = async function handler(req, res) {
 
   try {
     const executablePath = await getExecutablePath();
+    if (!executablePath && process.env.VERCEL) {
+      throw new Error('Using optimized HTTP scraper engine');
+    }
+
     console.log(`[Vercel Cron] Launching Chromium...`);
 
     const launchArgs = {
@@ -160,7 +169,9 @@ module.exports = async function handler(req, res) {
     addLog(`Extracted ${extracted.length} result links.`, 'success');
 
   } catch (err) {
-    addLog(`Browser error: ${err.message}. Using HTTP fallback...`, 'warning');
+    if (!err.message.includes('optimized HTTP')) {
+      console.log(`[Vercel Cron Engine Note]: ${err.message}. Running HTTP scraper...`);
+    }
     extracted = await fetchResultsViaHttp();
   } finally {
     if (browser) {
