@@ -28,12 +28,7 @@ function saveSnapshot(data) {
 // Resolve Chromium executablePath for Vercel Lambda (Linux) vs Local Dev (Windows/Mac)
 async function getExecutablePath() {
   if (process.env.VERCEL) {
-    try {
-      chromium.setGraphicsMode = false;
-      return await chromium.executablePath();
-    } catch (e) {
-      return null;
-    }
+    return await chromium.executablePath();
   }
 
   if (process.platform === 'win32') {
@@ -116,17 +111,13 @@ module.exports = async function handler(req, res) {
 
   try {
     const executablePath = await getExecutablePath();
-    if (!executablePath && process.env.VERCEL) {
-      throw new Error('Using optimized HTTP scraper engine');
-    }
-
     console.log(`[Vercel Cron] Launching Chromium...`);
 
     const launchArgs = {
-      args: process.env.VERCEL ? [...chromium.args, '--single-process', '--no-zygote'] : ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: process.env.VERCEL ? chromium.args : ['--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: process.env.VERCEL ? chromium.defaultViewport : { width: 1280, height: 800 },
       executablePath: executablePath || (await chromium.executablePath()),
-      headless: true
+      headless: process.env.VERCEL ? chromium.headless : true
     };
 
     browser = await puppeteer.launch(launchArgs);
@@ -169,9 +160,7 @@ module.exports = async function handler(req, res) {
     addLog(`Extracted ${extracted.length} result links.`, 'success');
 
   } catch (err) {
-    if (!err.message.includes('optimized HTTP')) {
-      console.log(`[Vercel Cron Engine Note]: ${err.message}. Running HTTP scraper...`);
-    }
+    addLog(`Browser notice: ${err.message}. Using HTTP fallback...`, 'warning');
     extracted = await fetchResultsViaHttp();
   } finally {
     if (browser) {
