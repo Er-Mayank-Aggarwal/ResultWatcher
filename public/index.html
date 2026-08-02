@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ResultWatcher - Vercel Serverless MBM Result Alarm & Mail Hook</title>
+  <title>ResultWatcher - MBM Result Portal Watcher & Twilio SMS</title>
 
   <!-- Google Fonts: Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 </head>
 <body>
 
-  <!-- Fullscreen Alarm Overlay Banner -->
+  <!-- Fullscreen Alarm Banner -->
   <div id="alarm-banner" class="alarm-banner hidden">
     <div class="alarm-banner-content">
       <div class="alarm-icon-pulse">
@@ -39,21 +39,21 @@
     <header class="app-header">
       <div class="header-brand">
         <div class="brand-logo">
-          <i class="fa-solid fa-paper-plane"></i>
+          <i class="fa-solid fa-comment-sms"></i>
         </div>
         <div class="brand-info">
-          <h1>Result<span class="highlight">Watcher</span> <span class="vercel-badge">Vercel Serverless</span></h1>
-          <p class="subtitle">MBM Portal Watcher &bull; Vercel Cron &bull; Mail Hook & Webhooks</p>
+          <h1>Result<span class="highlight">Watcher</span> <span class="badge-5m">5-Min Auto Timer</span></h1>
+          <p class="subtitle">MBM Portal Auto-Watcher &bull; Twilio SMS &bull; Continuous Background Scan</p>
         </div>
       </div>
 
       <div class="header-status">
         <div id="status-badge" class="status-badge status-online">
           <span class="status-dot"></span>
-          <span id="status-text">Vercel Cron Ready</span>
+          <span id="status-text">5-Min Auto Watcher Running</span>
         </div>
         <button id="btn-test-sound" class="btn btn-secondary btn-sm">
-          <i class="fa-solid fa-volume-high"></i> Test Alarm Sound
+          <i class="fa-solid fa-volume-high"></i> Test Sound
         </button>
       </div>
     </header>
@@ -61,90 +61,66 @@
     <!-- Main Grid Dashboard -->
     <main class="dashboard-grid">
 
-      <!-- Left Column: Notification Hooks & Settings -->
+      <!-- Left Column: Controls & Twilio Settings -->
       <section class="grid-col main-controls-col">
 
-        <!-- Mail Hook & Webhooks Config Card -->
+        <!-- Pause / Resume Control Card -->
         <div class="card glass-card border-primary">
           <div class="card-header">
-            <h3><i class="fa-solid fa-envelope-circle-check text-primary"></i> Mail & Webhook Hooks</h3>
+            <h3><i class="fa-solid fa-clock-rotate-left text-primary"></i> 5-Min Background Auto Watcher</h3>
           </div>
-          <div class="card-body">
-
-            <!-- SMTP Mail Hook Section -->
-            <div class="hook-section">
-              <h4 class="section-title"><i class="fa-solid fa-envelope"></i> SMTP Mail Hook (Nodemailer)</h4>
-              <div class="form-row">
-                <div class="form-group col-half">
-                  <label>SMTP Host</label>
-                  <input type="text" id="smtp-host" class="form-control" placeholder="smtp.gmail.com">
-                </div>
-                <div class="form-group col-half">
-                  <label>Port</label>
-                  <input type="text" id="smtp-port" class="form-control" placeholder="587">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group col-half">
-                  <label>SMTP User / Email</label>
-                  <input type="text" id="smtp-user" class="form-control" placeholder="your-email@gmail.com">
-                </div>
-                <div class="form-group col-half">
-                  <label>App Password</label>
-                  <input type="password" id="smtp-pass" class="form-control" placeholder="••••••••••••">
-                </div>
-              </div>
-              <div class="form-group">
-                <label>Notification Target Email</label>
-                <input type="text" id="notification-email" class="form-control" placeholder="destination-email@gmail.com">
-              </div>
-            </div>
-
-            <!-- Telegram Webhook Section -->
-            <div class="hook-section">
-              <h4 class="section-title"><i class="fa-brands fa-telegram text-sky"></i> Telegram Bot Hook</h4>
-              <div class="form-group">
-                <label>Telegram Bot Token</label>
-                <input type="text" id="telegram-token" class="form-control" placeholder="123456789:ABCdefGhIJK...">
-              </div>
-              <div class="form-group">
-                <label>Telegram Chat ID</label>
-                <input type="text" id="telegram-chat-id" class="form-control" placeholder="-100123456789">
-              </div>
-            </div>
-
-            <!-- Discord Webhook Section -->
-            <div class="hook-section">
-              <h4 class="section-title"><i class="fa-brands fa-discord text-indigo"></i> Discord Webhook</h4>
-              <div class="form-group">
-                <label>Discord Webhook URL</label>
-                <input type="text" id="discord-webhook" class="form-control" placeholder="https://discord.com/api/webhooks/...">
-              </div>
-            </div>
-
-            <!-- Save & Test Buttons -->
-            <div class="action-row">
-              <button id="btn-test-notifications" class="btn btn-primary btn-block">
-                <i class="fa-solid fa-paper-plane"></i> Send Test Email & Webhook Alerts
-              </button>
-              <button id="btn-save-hooks" class="btn btn-secondary btn-block btn-sm">
-                <i class="fa-solid fa-floppy-disk"></i> Save Hook Settings Locally
+          <div class="card-body text-center">
+            <p class="text-sm text-muted mb-4">
+              Scans <strong>mbmiums.in</strong> every 5 minutes in the background — even if this browser tab or site is closed.
+            </p>
+            <div class="pause-resume-box">
+              <button id="btn-pause-resume" class="btn btn-lg btn-success btn-block">
+                <i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER
               </button>
             </div>
-
+            <div class="mt-3">
+              <button id="btn-check-now" class="btn btn-secondary btn-block btn-sm">
+                <i class="fa-solid fa-rotate-right"></i> Check Portal Right Now
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Manual Scan & Vercel Info Card -->
-        <div class="card glass-card">
+        <!-- Twilio SMS Settings Card -->
+        <div class="card glass-card border-amber">
           <div class="card-header">
-            <h3><i class="fa-solid fa-bolt"></i> Vercel Cron Trigger</h3>
+            <h3><i class="fa-solid fa-mobile-screen-button text-amber"></i> Twilio SMS Alert Config</h3>
           </div>
           <div class="card-body">
-            <p class="text-sm text-muted mb-4">Vercel Cron automatically triggers <code class="code-badge">/api/cron</code> every 5 minutes on Vercel production.</p>
-            <button id="btn-run-cron-now" class="btn btn-warning btn-block">
-              <i class="fa-solid fa-play"></i> Trigger Vercel Cron Scan Now
-            </button>
+            <div class="form-group">
+              <label>Account SID</label>
+              <input type="text" id="twilio-sid" class="form-control" placeholder="Enter Account SID e.g. AC30b0...">
+            </div>
+
+            <div class="form-group">
+              <label>Twilio Auth Token</label>
+              <input type="password" id="twilio-token" class="form-control" placeholder="Enter your Twilio Auth Token...">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group col-half">
+                <label>From Number</label>
+                <input type="text" id="twilio-from" class="form-control" value="+15717245832">
+              </div>
+              <div class="form-group col-half">
+                <label>Recipient To</label>
+                <input type="text" id="twilio-to" class="form-control" value="+916367468738">
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button id="btn-send-test-sms" class="btn btn-warning btn-block">
+                <i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS
+              </button>
+              <button id="btn-save-twilio" class="btn btn-secondary btn-block btn-sm">
+                <i class="fa-solid fa-floppy-disk"></i> Save Twilio Settings
+              </button>
+            </div>
           </div>
         </div>
 
@@ -160,8 +136,8 @@
             <span class="stat-label">Published Results</span>
           </div>
           <div class="stat-box">
-            <span class="stat-value text-green" id="stat-cron-status">Active</span>
-            <span class="stat-label">Cron Schedule</span>
+            <span class="stat-value text-green" id="stat-timer-status">5 Mins</span>
+            <span class="stat-label">Scan Interval</span>
           </div>
           <div class="stat-box">
             <span class="stat-value text-amber" id="stat-alerts-count">0</span>
@@ -172,9 +148,9 @@
         <!-- Discovered Results Table -->
         <div class="card glass-card">
           <div class="card-header">
-            <h3><i class="fa-solid fa-list-check"></i> Published Results (Odd Semester 2025-26)</h3>
+            <h3><i class="fa-solid fa-list-check"></i> Published Results ((II)Odd Semester 2025-26)</h3>
             <span class="table-search">
-              <input type="text" id="table-search-input" placeholder="Filter results...">
+              <input type="text" id="table-search-input" placeholder="Search results...">
             </span>
           </div>
           <div class="card-body p-0">
@@ -204,7 +180,7 @@
           </div>
           <div class="card-body p-0">
             <div id="logs-console" class="logs-console">
-              <div class="log-entry log-info">[System] ResultWatcher Vercel Serverless Engine Initialized.</div>
+              <div class="log-entry log-info">[System] ResultWatcher 5-Minute Auto Engine Initialized.</div>
             </div>
           </div>
         </div>
@@ -215,7 +191,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>ResultWatcher &bull; Vercel Serverless Cron Engine &bull; Mail Hook, Telegram & Discord Integration</p>
+      <p>ResultWatcher &bull; MBM University Result Portal &bull; Twilio SMS Integration &bull; 5-Min Background Auto Watcher</p>
     </footer>
   </div>
 

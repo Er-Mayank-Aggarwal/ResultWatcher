@@ -1,4 +1,4 @@
-// ResultWatcher Vercel Client Application Engine
+// ResultWatcher Client Application Engine
 document.addEventListener('DOMContentLoaded', () => {
 
   let audioContext = null;
@@ -7,71 +7,29 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentState = null;
 
   // DOM Elements
-  const smtpHost = document.getElementById('smtp-host');
-  const smtpPort = document.getElementById('smtp-port');
-  const smtpUser = document.getElementById('smtp-user');
-  const smtpPass = document.getElementById('smtp-pass');
-  const notificationEmail = document.getElementById('notification-email');
-  const telegramToken = document.getElementById('telegram-token');
-  const telegramChatId = document.getElementById('telegram-chat-id');
-  const discordWebhook = document.getElementById('discord-webhook');
-
-  const btnTestNotifications = document.getElementById('btn-test-notifications');
-  const btnSaveHooks = document.getElementById('btn-save-hooks');
-  const btnRunCronNow = document.getElementById('btn-run-cron-now');
+  const btnPauseResume = document.getElementById('btn-pause-resume');
+  const btnCheckNow = document.getElementById('btn-check-now');
+  const btnSendTestSms = document.getElementById('btn-send-test-sms');
+  const btnSaveTwilio = document.getElementById('btn-save-twilio');
   const btnTestSound = document.getElementById('btn-test-sound');
   const btnSilenceAlarm = document.getElementById('btn-silence-alarm');
   const btnClearAlarm = document.getElementById('btn-clear-alarm');
   const alarmBanner = document.getElementById('alarm-banner');
   const alarmDetailsText = document.getElementById('alarm-details-text');
 
+  const twilioSid = document.getElementById('twilio-sid');
+  const twilioToken = document.getElementById('twilio-token');
+  const twilioFrom = document.getElementById('twilio-from');
+  const twilioTo = document.getElementById('twilio-to');
+
+  const statusBadge = document.getElementById('status-badge');
+  const statusText = document.getElementById('status-text');
   const statKnownCount = document.getElementById('stat-known-count');
+  const statTimerStatus = document.getElementById('stat-timer-status');
   const statAlertsCount = document.getElementById('stat-alerts-count');
   const resultsTableBody = document.getElementById('results-table-body');
   const logsConsole = document.getElementById('logs-console');
   const tableSearchInput = document.getElementById('table-search-input');
-
-  // Load saved credentials from LocalStorage
-  function loadHookCredentials() {
-    smtpHost.value = localStorage.getItem('rw_smtp_host') || '';
-    smtpPort.value = localStorage.getItem('rw_smtp_port') || '587';
-    smtpUser.value = localStorage.getItem('rw_smtp_user') || '';
-    smtpPass.value = localStorage.getItem('rw_smtp_pass') || '';
-    notificationEmail.value = localStorage.getItem('rw_notification_email') || '';
-    telegramToken.value = localStorage.getItem('rw_telegram_token') || '';
-    telegramChatId.value = localStorage.getItem('rw_telegram_chat_id') || '';
-    discordWebhook.value = localStorage.getItem('rw_discord_webhook') || '';
-  }
-
-  // Save credentials to LocalStorage
-  function saveHookCredentials() {
-    localStorage.setItem('rw_smtp_host', smtpHost.value.trim());
-    localStorage.setItem('rw_smtp_port', smtpPort.value.trim());
-    localStorage.setItem('rw_smtp_user', smtpUser.value.trim());
-    localStorage.setItem('rw_smtp_pass', smtpPass.value.trim());
-    localStorage.setItem('rw_notification_email', notificationEmail.value.trim());
-    localStorage.setItem('rw_telegram_token', telegramToken.value.trim());
-    localStorage.setItem('rw_telegram_chat_id', telegramChatId.value.trim());
-    localStorage.setItem('rw_discord_webhook', discordWebhook.value.trim());
-    addLog('Hook credentials saved locally in browser.', 'success');
-  }
-
-  // LocalStorage Caching for Results (Persistent on Vercel)
-  function getCachedResults() {
-    try {
-      const cached = localStorage.getItem('rw_cached_results');
-      if (cached) return JSON.parse(cached);
-    } catch (e) {}
-    return [];
-  }
-
-  function saveCachedResults(list) {
-    if (list && list.length > 0) {
-      try {
-        localStorage.setItem('rw_cached_results', JSON.stringify(list));
-      } catch (e) {}
-    }
-  }
 
   // Web Audio Alarm Synthesizer
   function initAudioContext() {
@@ -128,31 +86,43 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch status from server
   async function fetchStatus() {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/watcher/status');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       currentState = data;
-
-      if (data.knownResultsList && data.knownResultsList.length > 0) {
-        saveCachedResults(data.knownResultsList);
-      } else {
-        // Fallback to cached results if Vercel serverless container is fresh
-        data.knownResultsList = getCachedResults();
-        data.knownCount = data.knownResultsList.length;
-      }
-
       renderUI(data);
     } catch (err) {
       console.warn('Status fetch error:', err.message);
-      // Fallback to cached results on error
-      const cached = getCachedResults();
-      renderUI({ knownCount: cached.length, knownResultsList: cached });
     }
   }
 
   function renderUI(data) {
-    const resultsList = (data.knownResultsList && data.knownResultsList.length > 0) ? data.knownResultsList : getCachedResults();
-    statKnownCount.textContent = resultsList.length || 0;
+    // 1. Pause / Resume Button & Status Badge
+    if (data.isPaused) {
+      statusBadge.className = 'status-badge status-offline';
+      statusText.textContent = 'Watcher PAUSED';
+      btnPauseResume.className = 'btn btn-lg btn-danger btn-block';
+      btnPauseResume.innerHTML = '<i class="fa-solid fa-play"></i> RESUME AUTO WATCHER';
+      statTimerStatus.textContent = 'PAUSED';
+      statTimerStatus.className = 'stat-value text-amber';
+    } else {
+      statusBadge.className = 'status-badge status-online';
+      statusText.textContent = data.isScanning ? 'Scanning Portal...' : '5-Min Auto Watcher Running';
+      btnPauseResume.className = 'btn btn-lg btn-success btn-block';
+      btnPauseResume.innerHTML = '<i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER';
+      statTimerStatus.textContent = '5 Mins';
+      statTimerStatus.className = 'stat-value text-green';
+    }
+
+    // 2. Twilio Config Sync
+    if (data.twilio) {
+      if (document.activeElement !== twilioSid) twilioSid.value = data.twilio.accountSid || '';
+      if (document.activeElement !== twilioFrom) twilioFrom.value = data.twilio.fromNumber || '';
+      if (document.activeElement !== twilioTo) twilioTo.value = data.twilio.toNumber || '';
+    }
+
+    // 3. Stats & Alerts
+    statKnownCount.textContent = data.knownCount || 0;
     statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
 
     if (data.activeAlerts && data.activeAlerts.length > 0) {
@@ -170,7 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    renderResultsTable(resultsList);
+    // 4. Logs & Table
+    renderResultsTable(data.knownResultsList || []);
+    renderLogs(data.logs || []);
   }
 
   function renderResultsTable(items) {
@@ -186,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (filtered.length === 0) {
-      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded yet. Click "Trigger Vercel Cron Scan Now" above.</td></tr>`;
+      resultsTableBody.innerHTML = `<tr><td colspan="3" class="text-center text-muted">No published result links loaded. Click "Check Portal Right Now" above.</td></tr>`;
       return;
     }
 
@@ -203,84 +175,105 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
+  function renderLogs(logs) {
+    if (!logs || logs.length === 0) return;
+    logsConsole.innerHTML = logs.map(l => {
+      let logClass = 'log-info';
+      if (l.type === 'alert') logClass = 'log-alert';
+      else if (l.type === 'warning') logClass = 'log-warning';
+      else if (l.type === 'error') logClass = 'log-error';
+      else if (l.type === 'success') logClass = 'log-success';
+
+      return `<div class="log-entry ${logClass}">[${l.timestamp}] ${escapeHtml(l.message)}</div>`;
+    }).join('');
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
   }
 
   // Event Handlers
-  btnSaveHooks.addEventListener('click', saveHookCredentials);
-
-  btnTestNotifications.addEventListener('click', async () => {
-    saveHookCredentials();
-    btnTestNotifications.disabled = true;
-    btnTestNotifications.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending Test Alerts...';
-
-    const payload = {
-      smtpHost: smtpHost.value.trim(),
-      smtpPort: smtpPort.value.trim(),
-      smtpUser: smtpUser.value.trim(),
-      smtpPass: smtpPass.value.trim(),
-      notificationEmail: notificationEmail.value.trim(),
-      telegramBotToken: telegramToken.value.trim(),
-      telegramChatId: telegramChatId.value.trim(),
-      discordWebhookUrl: discordWebhook.value.trim()
-    };
-
+  btnPauseResume.addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/test-notifications', {
+      const res = await fetch('/api/watcher/toggle-pause', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        addLog(`Auto-watcher ${data.isPaused ? 'PAUSED ⏸️' : 'RESUMED 🟢'}`, 'success');
+        fetchStatus();
+      }
+    } catch (e) {
+      addLog(`Failed to toggle pause: ${e.message}`, 'error');
+    }
+  });
+
+  btnCheckNow.addEventListener('click', async () => {
+    btnCheckNow.disabled = true;
+    btnCheckNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Portal...';
+    try {
+      await fetch('/api/watcher/check-now', { method: 'POST' });
+      setTimeout(fetchStatus, 2000);
+    } catch (e) {
+      addLog(`Manual check error: ${e.message}`, 'error');
+    } finally {
+      setTimeout(() => {
+        btnCheckNow.disabled = false;
+        btnCheckNow.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Check Portal Right Now';
+      }, 2500);
+    }
+  });
+
+  btnSaveTwilio.addEventListener('click', async () => {
+    const payload = {
+      accountSid: twilioSid.value.trim(),
+      authToken: twilioToken.value.trim(),
+      fromNumber: twilioFrom.value.trim(),
+      toNumber: twilioTo.value.trim()
+    };
+    try {
+      const res = await fetch('/api/watcher/twilio-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
-        addLog('Test notification execution completed!', 'success');
-        if (data.results) {
-          if (data.results.mail?.success) addLog('✉️ Mail Hook test email delivered!', 'success');
-          if (data.results.telegram?.success) addLog('💬 Telegram Bot message delivered!', 'success');
-          if (data.results.discord?.success) addLog('🎮 Discord Webhook embed delivered!', 'success');
-        }
-      } else {
-        addLog(`Test alert error: ${data.error}`, 'error');
+        addLog('Twilio SMS configuration saved.', 'success');
       }
     } catch (e) {
-      addLog(`Test request failed: ${e.message}`, 'error');
-    } finally {
-      btnTestNotifications.disabled = false;
-      btnTestNotifications.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Test Email & Webhook Alerts';
+      addLog(`Failed to save Twilio config: ${e.message}`, 'error');
     }
   });
 
-  btnRunCronNow.addEventListener('click', async () => {
-    btnRunCronNow.disabled = true;
-    btnRunCronNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Executing Vercel Cron Scan...';
-    addLog('Manual Vercel Cron trigger initiated...', 'info');
+  btnSendTestSms.addEventListener('click', async () => {
+    btnSendTestSms.disabled = true;
+    btnSendTestSms.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending Test SMS...';
+    
+    const payload = {
+      accountSid: twilioSid.value.trim(),
+      authToken: twilioToken.value.trim(),
+      fromNumber: twilioFrom.value.trim(),
+      toNumber: twilioTo.value.trim()
+    };
 
     try {
-      const res = await fetch('/api/cron');
+      const res = await fetch('/api/watcher/test-twilio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
       const data = await res.json();
       if (data.success) {
-        addLog(`Vercel Cron scan completed! Extracted ${data.extractedCount} links.`, 'success');
-        
-        if (data.knownResultsList && data.knownResultsList.length > 0) {
-          saveCachedResults(data.knownResultsList);
-          renderUI({ knownCount: data.knownResultsList.length, knownResultsList: data.knownResultsList });
-        }
-
-        if (data.newResultsFound > 0) {
-          addLog(`🚨 ${data.newResultsFound} NEW RESULT(S) DETECTED! Alerts dispatched.`, 'alert');
-        }
+        addLog(`📱 Test SMS sent to ${twilioTo.value}! (SID: ${data.sid})`, 'success');
       } else {
-        addLog(`Vercel Cron error: ${data.error}`, 'error');
+        addLog(`Twilio SMS test error: ${data.error}`, 'error');
       }
     } catch (e) {
-      addLog(`Vercel Cron trigger error: ${e.message}`, 'error');
+      addLog(`Test SMS request failed: ${e.message}`, 'error');
     } finally {
-      setTimeout(() => {
-        btnRunCronNow.disabled = false;
-        btnRunCronNow.innerHTML = '<i class="fa-solid fa-play"></i> Trigger Vercel Cron Scan Now';
-      }, 2000);
+      btnSendTestSms.disabled = false;
+      btnSendTestSms.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS';
+      fetchStatus();
     }
   });
 
@@ -297,24 +290,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  btnClearAlarm.addEventListener('click', () => {
+  btnClearAlarm.addEventListener('click', async () => {
     isSoundSilenced = true;
     alarmBanner.classList.add('hidden');
     if (alarmIntervalId) {
       clearInterval(alarmIntervalId);
       alarmIntervalId = null;
     }
+    try {
+      await fetch('/api/watcher/clear-alerts', { method: 'POST' });
+      fetchStatus();
+    } catch (e) {}
   });
 
   if (tableSearchInput) {
     tableSearchInput.addEventListener('input', () => {
-      const cached = getCachedResults();
-      renderResultsTable(cached);
+      if (currentState) renderResultsTable(currentState.knownResultsList || []);
     });
   }
 
   // Init
-  loadHookCredentials();
   fetchStatus();
-  setInterval(fetchStatus, 5000);
+  setInterval(fetchStatus, 4000);
 });
