@@ -11,17 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPauseResume = document.getElementById('btn-pause-resume');
   const btnCheckNow = document.getElementById('btn-check-now');
   const btnSendTestSms = document.getElementById('btn-send-test-sms');
-  const btnSaveTwilio = document.getElementById('btn-save-twilio');
   const btnTestSound = document.getElementById('btn-test-sound');
   const btnSilenceAlarm = document.getElementById('btn-silence-alarm');
   const btnClearAlarm = document.getElementById('btn-clear-alarm');
   const alarmBanner = document.getElementById('alarm-banner');
   const alarmDetailsText = document.getElementById('alarm-details-text');
-
-  const twilioSid = document.getElementById('twilio-sid');
-  const twilioToken = document.getElementById('twilio-token');
-  const twilioFrom = document.getElementById('twilio-from');
-  const twilioTo = document.getElementById('twilio-to');
 
   const statusBadge = document.getElementById('status-badge');
   const statusText = document.getElementById('status-text');
@@ -38,34 +32,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (countdownSeconds <= 0) {
       countdownSeconds = 300;
       addLog('5-Minute Timer triggered auto-scan...', 'info');
-      fetch('/api/cron').then(r => r.json()).then(data => {
-        if (data.knownResultsList) renderResultsTable(data.knownResultsList);
-      }).catch(() => {});
+      triggerScan();
     }
 
     const mins = String(Math.floor(countdownSeconds / 60)).padStart(2, '0');
     const secs = String(countdownSeconds % 60).padStart(2, '0');
-    if (statTimerCountdown) {
+    if (statTimerCountdown && statTimerCountdown.textContent !== 'PAUSED') {
       statTimerCountdown.textContent = `${mins}:${secs}`;
     }
   }, 1000);
-
-  // Load saved credentials from LocalStorage
-  function loadLocalCredentials() {
-    if (localStorage.getItem('rw_twilio_sid')) twilioSid.value = localStorage.getItem('rw_twilio_sid');
-    if (localStorage.getItem('rw_twilio_token')) twilioToken.value = localStorage.getItem('rw_twilio_token');
-    if (localStorage.getItem('rw_twilio_from')) twilioFrom.value = localStorage.getItem('rw_twilio_from');
-    if (localStorage.getItem('rw_twilio_to')) twilioTo.value = localStorage.getItem('rw_twilio_to');
-  }
-
-  // Save credentials to LocalStorage
-  function saveLocalCredentials() {
-    localStorage.setItem('rw_twilio_sid', twilioSid.value.trim());
-    localStorage.setItem('rw_twilio_token', twilioToken.value.trim());
-    localStorage.setItem('rw_twilio_from', twilioFrom.value.trim());
-    localStorage.setItem('rw_twilio_to', twilioTo.value.trim());
-    addLog('Twilio settings saved locally in browser.', 'success');
-  }
 
   // LocalStorage Caching for Extracted Result Links
   function getCachedResults() {
@@ -136,6 +111,30 @@ document.addEventListener('DOMContentLoaded', () => {
     logsConsole.insertBefore(div, logsConsole.firstChild);
   }
 
+  // Trigger Scan Function
+  async function triggerScan() {
+    try {
+      let res = await fetch('/api/cron');
+      if (!res.ok) {
+        res = await fetch('/api/watcher/check-now', { method: 'POST' });
+      }
+      const data = await res.json();
+      if (data.success) {
+        addLog(`Scan completed! Extracted ${data.extractedCount || data.knownCount || 0} links.`, 'success');
+        if (data.knownResultsList && data.knownResultsList.length > 0) {
+          saveCachedResults(data.knownResultsList);
+          renderResultsTable(data.knownResultsList);
+          statKnownCount.textContent = data.knownResultsList.length;
+        }
+        if (data.logs) renderLogs(data.logs);
+      } else {
+        addLog(`Scan error: ${data.error || data.message}`, 'error');
+      }
+    } catch (e) {
+      addLog(`Scan error: ${e.message}`, 'error');
+    }
+  }
+
   // Fetch status from server
   async function fetchStatus() {
     try {
@@ -143,12 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       currentState = data;
-
-      if (data.twilio) {
-        if (!twilioSid.value && data.twilio.accountSid) twilioSid.value = data.twilio.accountSid;
-        if (!twilioFrom.value && data.twilio.fromNumber) twilioFrom.value = data.twilio.fromNumber;
-        if (!twilioTo.value && data.twilio.toNumber) twilioTo.value = data.twilio.toNumber;
-      }
 
       if (data.knownResultsList && data.knownResultsList.length > 0) {
         saveCachedResults(data.knownResultsList);
@@ -163,37 +156,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderUI(data) {
     if (data.isPaused) {
-      statusBadge.className = 'status-badge status-offline';
-      statusText.textContent = 'Watcher PAUSED';
-      btnPauseResume.className = 'btn btn-lg btn-danger btn-block';
-      btnPauseResume.innerHTML = '<i class="fa-solid fa-play"></i> RESUME AUTO WATCHER';
+      if (statusBadge) {
+        statusBadge.className = 'status-badge status-offline';
+        statusText.textContent = 'Watcher PAUSED';
+      }
+      if (btnPauseResume) {
+        btnPauseResume.className = 'btn btn-lg btn-danger btn-block';
+        btnPauseResume.innerHTML = '<i class="fa-solid fa-play"></i> RESUME AUTO WATCHER';
+      }
       if (statTimerCountdown) {
         statTimerCountdown.textContent = 'PAUSED';
         statTimerCountdown.className = 'stat-value text-amber';
       }
     } else {
-      statusBadge.className = 'status-badge status-online';
-      statusText.textContent = data.isScanning ? 'Scanning Portal...' : 'Auto Watcher Active';
-      btnPauseResume.className = 'btn btn-lg btn-success btn-block';
-      btnPauseResume.innerHTML = '<i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER';
+      if (statusBadge) {
+        statusBadge.className = 'status-badge status-online';
+        statusText.textContent = data.isScanning ? 'Scanning Portal...' : 'Auto Watcher Active';
+      }
+      if (btnPauseResume) {
+        btnPauseResume.className = 'btn btn-lg btn-success btn-block';
+        btnPauseResume.innerHTML = '<i class="fa-solid fa-pause"></i> PAUSE AUTO WATCHER';
+      }
       if (statTimerCountdown && statTimerCountdown.textContent === 'PAUSED') {
         statTimerCountdown.className = 'stat-value text-green';
       }
     }
 
     const items = (data.knownResultsList && data.knownResultsList.length > 0) ? data.knownResultsList : getCachedResults();
-    statKnownCount.textContent = items.length || 0;
-    statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
+    if (statKnownCount) statKnownCount.textContent = items.length || 0;
+    if (statAlertsCount) statAlertsCount.textContent = data.activeAlerts ? data.activeAlerts.length : 0;
 
     if (data.activeAlerts && data.activeAlerts.length > 0) {
-      alarmBanner.classList.remove('hidden');
-      alarmDetailsText.textContent = `Latest result: "${data.activeAlerts[0].title}"`;
+      if (alarmBanner) alarmBanner.classList.remove('hidden');
+      if (alarmDetailsText) alarmDetailsText.textContent = `Latest result: "${data.activeAlerts[0].title}"`;
       if (!alarmIntervalId) {
         playAlarmSequence();
         alarmIntervalId = setInterval(playAlarmSequence, 3000);
       }
     } else {
-      alarmBanner.classList.add('hidden');
+      if (alarmBanner) alarmBanner.classList.add('hidden');
       if (alarmIntervalId) {
         clearInterval(alarmIntervalId);
         alarmIntervalId = null;
@@ -253,110 +254,88 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Event Handlers
-  btnSaveTwilio.addEventListener('click', () => {
-    saveLocalCredentials();
-    fetch('/api/watcher/twilio-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accountSid: twilioSid.value.trim(),
-        authToken: twilioToken.value.trim(),
-        fromNumber: twilioFrom.value.trim(),
-        toNumber: twilioTo.value.trim()
-      })
-    }).catch(() => {});
-  });
+  if (btnSendTestSms) {
+    btnSendTestSms.addEventListener('click', async () => {
+      btnSendTestSms.disabled = true;
+      btnSendTestSms.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending Test SMS...';
+      addLog('Sending test Twilio SMS alert...', 'info');
 
-  btnSendTestSms.addEventListener('click', async () => {
-    saveLocalCredentials();
-    btnSendTestSms.disabled = true;
-    btnSendTestSms.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending Test SMS...';
-    
-    const payload = {
-      accountSid: twilioSid.value.trim(),
-      authToken: twilioToken.value.trim(),
-      fromNumber: twilioFrom.value.trim(),
-      toNumber: twilioTo.value.trim()
-    };
-
-    try {
-      const endpoint = '/api/test-notifications';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        addLog(`📱 Test SMS sent to ${twilioTo.value}! (SID: ${data.sid})`, 'success');
-      } else {
-        addLog(`Twilio SMS test error: ${data.error || data.message}`, 'error');
-      }
-    } catch (e) {
-      addLog(`Test SMS request failed: ${e.message}`, 'error');
-    } finally {
-      btnSendTestSms.disabled = false;
-      btnSendTestSms.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS';
-    }
-  });
-
-  btnCheckNow.addEventListener('click', async () => {
-    btnCheckNow.disabled = true;
-    btnCheckNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning Portal...';
-    addLog('Manual scan triggered...', 'info');
-    try {
-      const res = await fetch('/api/cron');
-      const data = await res.json();
-      if (data.success) {
-        addLog(`Scan completed! Extracted ${data.extractedCount} links.`, 'success');
-        if (data.knownResultsList && data.knownResultsList.length > 0) {
-          saveCachedResults(data.knownResultsList);
-          renderResultsTable(data.knownResultsList);
+      try {
+        let res = await fetch('/api/test-notifications', { method: 'POST' });
+        if (!res.ok) {
+          res = await fetch('/api/watcher/test-twilio', { method: 'POST' });
         }
+        const data = await res.json();
+        if (data.success) {
+          addLog(`📱 Test SMS sent to +916367468738! (SID: ${data.sid})`, 'success');
+        } else {
+          addLog(`Twilio SMS test error: ${data.error || data.message}`, 'error');
+        }
+      } catch (e) {
+        addLog(`Test SMS request failed: ${e.message}`, 'error');
+      } finally {
+        btnSendTestSms.disabled = false;
+        btnSendTestSms.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Test Twilio SMS';
       }
-    } catch (e) {
-      addLog(`Scan error: ${e.message}`, 'error');
-    } finally {
+    });
+  }
+
+  if (btnCheckNow) {
+    btnCheckNow.addEventListener('click', async () => {
+      btnCheckNow.disabled = true;
+      btnCheckNow.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning Portal...';
+      addLog('Manual scan triggered by user...', 'info');
+
+      await triggerScan();
+
       countdownSeconds = 300; // Reset countdown
       setTimeout(() => {
         btnCheckNow.disabled = false;
         btnCheckNow.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Check Portal Right Now';
       }, 2000);
-    }
-  });
+    });
+  }
 
-  btnPauseResume.addEventListener('click', async () => {
-    try {
-      const res = await fetch('/api/watcher/toggle-pause', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        addLog(`Auto-watcher ${data.isPaused ? 'PAUSED ⏸️' : 'RESUMED 🟢'}`, 'success');
-        fetchStatus();
+  if (btnPauseResume) {
+    btnPauseResume.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/watcher/toggle-pause', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          addLog(`Auto-watcher ${data.isPaused ? 'PAUSED ⏸️' : 'RESUMED 🟢'}`, 'success');
+          fetchStatus();
+        }
+      } catch (e) {}
+    });
+  }
+
+  if (btnTestSound) {
+    btnTestSound.addEventListener('click', () => {
+      isSoundSilenced = false;
+      playAlarmSequence();
+    });
+  }
+
+  if (btnSilenceAlarm) {
+    btnSilenceAlarm.addEventListener('click', () => {
+      isSoundSilenced = true;
+      if (alarmIntervalId) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
       }
-    } catch (e) {}
-  });
+    });
+  }
 
-  btnTestSound.addEventListener('click', () => {
-    isSoundSilenced = false;
-    playAlarmSequence();
-  });
-
-  btnSilenceAlarm.addEventListener('click', () => {
-    isSoundSilenced = true;
-    if (alarmIntervalId) {
-      clearInterval(alarmIntervalId);
-      alarmIntervalId = null;
-    }
-  });
-
-  btnClearAlarm.addEventListener('click', async () => {
-    isSoundSilenced = true;
-    alarmBanner.classList.add('hidden');
-    if (alarmIntervalId) {
-      clearInterval(alarmIntervalId);
-      alarmIntervalId = null;
-    }
-  });
+  if (btnClearAlarm) {
+    btnClearAlarm.addEventListener('click', async () => {
+      isSoundSilenced = true;
+      if (alarmBanner) alarmBanner.classList.add('hidden');
+      if (alarmIntervalId) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+      }
+    });
+  }
 
   if (tableSearchInput) {
     tableSearchInput.addEventListener('input', () => {
@@ -365,7 +344,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Init
-  loadLocalCredentials();
   fetchStatus();
   setInterval(fetchStatus, 4000);
 });
